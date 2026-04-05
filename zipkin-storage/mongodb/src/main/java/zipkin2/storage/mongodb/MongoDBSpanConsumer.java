@@ -11,7 +11,7 @@ import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.time.Instant;
+import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -160,7 +160,7 @@ final class MongoDBSpanConsumer implements SpanConsumer {
     if (span.kind() != null) doc.put("kind", span.kind().name());
     if (span.name() != null) doc.put("name", span.name());
     if (span.timestampAsLong() > 0) {
-      doc.put("ts", Instant.ofEpochMilli(span.timestampAsLong() / 1000));
+      doc.put("ts", new Date(span.timestampAsLong() / 1000));
       doc.put("ts_micro", span.timestampAsLong());
     }
     if (span.durationAsLong() > 0) doc.put("duration", span.durationAsLong());

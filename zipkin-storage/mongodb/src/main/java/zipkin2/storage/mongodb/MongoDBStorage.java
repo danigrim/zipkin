@@ -4,7 +4,10 @@
  */
 package zipkin2.storage.mongodb;
 
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoCommandException;
+import com.mongodb.MongoCredential;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -179,7 +182,13 @@ public final class MongoDBStorage extends StorageComponent {
     this.ensureSchema = builder.ensureSchema;
     this.maxTraceCols = builder.maxTraceCols;
     this.spanTtl = builder.spanTtl;
-    this.client = MongoClients.create(builder.connectionString);
+    MongoClientSettings.Builder settingsBuilder = MongoClientSettings.builder()
+      .applyConnectionString(new ConnectionString(builder.connectionString));
+    if (builder.username != null && builder.password != null) {
+      settingsBuilder.credential(MongoCredential.createCredential(
+        builder.username, builder.database, builder.password.toCharArray()));
+    }
+    this.client = MongoClients.create(settingsBuilder.build());
     this.db = client.getDatabase(builder.database);
     if (ensureSchema) ensureIndexes();
   }

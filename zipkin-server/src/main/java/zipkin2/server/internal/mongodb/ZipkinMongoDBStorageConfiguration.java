@@ -11,6 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import zipkin2.storage.StorageComponent;
 import zipkin2.storage.mongodb.MongoDBStorage;
 
@@ -20,6 +21,7 @@ import zipkin2.storage.mongodb.MongoDBStorage;
  * <p>This is activated when {@code zipkin.storage.type=mongodb} is set and the MongoDB storage
  * class is on the classpath.
  */
+@Configuration(proxyBeanMethods = false)
 @ConditionalOnClass(MongoDBStorage.class)
 @EnableConfigurationProperties(ZipkinMongoDBStorageProperties.class)
 @ConditionalOnProperty(name = "zipkin.storage.type", havingValue = "mongodb")
