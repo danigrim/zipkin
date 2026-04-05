@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright The OpenZipkin Authors
+    SPDX-License-Identifier: Apache-2.0
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.zipkin.zipkin2</groupId>
+    <artifactId>zipkin-storage-parent</artifactId>
+    <version>3.6.1-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>zipkin-storage-mongodb</artifactId>
+  <name>Storage: MongoDB</name>
+
+  <properties>
+    <main.basedir>${project.basedir}/../..</main.basedir>
+    <mongodb-driver.version>5.4.0</mongodb-driver.version>
+
+    <!-- error-prone doesn't like some patterns used with MongoDB driver -->
+    <errorprone.args>-Xep:CheckReturnValue:OFF</errorprone.args>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>mongodb-driver-sync</artifactId>
+      <version>${mongodb-driver.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>bson</artifactId>
+      <version>${mongodb-driver.version}</version>
+    </dependency>
+
+    <!-- Set SLF4J version to what's used by the server -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${slf4j.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- testcontainers-junit-jupiter is inherited from parent -->
+  </dependencies>
+</project>
