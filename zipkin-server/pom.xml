@@ -236,6 +236,14 @@
       <optional>true</optional>
     </dependency>
 
+    <!-- MongoDB backend -->
+    <dependency>
+      <groupId>${project.groupId}.zipkin2</groupId>
+      <artifactId>zipkin-storage-mongodb</artifactId>
+      <version>${project.version}</version>
+      <optional>true</optional>
+    </dependency>
+
     <!-- MySQL backend -->
     <dependency>
       <groupId>${project.groupId}.zipkin2</groupId>
