@@ -303,7 +303,20 @@ final class MongoSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
     @Override protected List<List<Span>> doExecute() throws IOException {
       MongoCollection<Document> col = spanStore.storage.spans();
 
-      FindIterable<Document> docs = col.find(in("trace_id", traceIds));
+      org.bson.conversions.Bson filter;
+      if (!spanStore.strictTraceId) {
+        // When not strict, match by lower 64-bit suffix using regex
+        List<org.bson.conversions.Bson> orFilters = new ArrayList<>();
+        for (String traceId : traceIds) {
+          orFilters.add(com.mongodb.client.model.Filters.regex("trace_id", traceId + "$"));
+        }
+        filter = orFilters.size() == 1 ? orFilters.get(0)
+          : com.mongodb.client.model.Filters.or(orFilters);
+      } else {
+        filter = in("trace_id", traceIds);
+      }
+
+      FindIterable<Document> docs = col.find(filter);
       List<Span> spans = new ArrayList<>();
       try (MongoCursor<Document> cursor = docs.iterator()) {
         while (cursor.hasNext()) {
@@ -311,7 +324,10 @@ final class MongoSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
         }
       }
 
-      return spanStore.groupByTraceId.map(spans);
+      List<List<Span>> result = spanStore.groupByTraceId.map(spans);
+      return spanStore.strictTraceId
+        ? StrictTraceId.filterTraces(traceIds).map(result)
+        : result;
     }
 
     @Override protected void doEnqueue(Callback<List<List<Span>>> callback) {

@@ -133,6 +133,9 @@ public final class MongoStorage extends StorageComponent {
 
   volatile MongoClient lazyClient;
   volatile boolean ensuredSchema;
+  volatile MongoSpanStore lazySpanStore;
+  volatile MongoSpanConsumer lazySpanConsumer;
+  volatile MongoAutocompleteTags lazyAutocompleteTags;
 
   /** close is typically called from a different thread */
   volatile boolean closeCalled;
@@ -241,27 +244,58 @@ public final class MongoStorage extends StorageComponent {
     }
   }
 
+  MongoSpanStore mongoSpanStore() {
+    MongoSpanStore result = lazySpanStore;
+    if (result == null) {
+      synchronized (this) {
+        result = lazySpanStore;
+        if (result == null) {
+          ensureSchema();
+          lazySpanStore = result = new MongoSpanStore(this);
+        }
+      }
+    }
+    return result;
+  }
+
   @Override public SpanStore spanStore() {
-    ensureSchema();
-    return new MongoSpanStore(this);
+    return mongoSpanStore();
   }
 
   @Override public Traces traces() {
-    return (Traces) spanStore();
+    return mongoSpanStore();
   }
 
   @Override public ServiceAndSpanNames serviceAndSpanNames() {
-    return (ServiceAndSpanNames) spanStore();
+    return mongoSpanStore();
   }
 
   @Override public AutocompleteTags autocompleteTags() {
-    ensureSchema();
-    return new MongoAutocompleteTags(this);
+    MongoAutocompleteTags result = lazyAutocompleteTags;
+    if (result == null) {
+      synchronized (this) {
+        result = lazyAutocompleteTags;
+        if (result == null) {
+          ensureSchema();
+          lazyAutocompleteTags = result = new MongoAutocompleteTags(this);
+        }
+      }
+    }
+    return result;
   }
 
   @Override public SpanConsumer spanConsumer() {
-    ensureSchema();
-    return new MongoSpanConsumer(this);
+    MongoSpanConsumer result = lazySpanConsumer;
+    if (result == null) {
+      synchronized (this) {
+        result = lazySpanConsumer;
+        if (result == null) {
+          ensureSchema();
+          lazySpanConsumer = result = new MongoSpanConsumer(this);
+        }
+      }
+    }
+    return result;
   }
 
   @Override public CheckResult check() {
@@ -291,6 +325,9 @@ public final class MongoStorage extends StorageComponent {
     dependencies().drop();
     autocompleteTagsCollection().drop();
     ensuredSchema = false;
+    lazySpanStore = null;
+    lazySpanConsumer = null;
+    lazyAutocompleteTags = null;
     ensureSchema();
   }
 }
