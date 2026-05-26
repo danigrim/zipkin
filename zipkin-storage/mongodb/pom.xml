@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright The OpenZipkin Authors
+    SPDX-License-Identifier: Apache-2.0
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.zipkin.zipkin2</groupId>
+    <artifactId>zipkin-storage-parent</artifactId>
+    <version>3.6.1-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>zipkin-storage-mongodb</artifactId>
+  <name>Storage: MongoDB</name>
+
+  <properties>
+    <main.basedir>${project.basedir}/../..</main.basedir>
+    <mongo-driver.version>5.2.1</mongo-driver.version>
+  </properties>
+
+  <dependencies>
+    <!-- MongoDB sync driver -->
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>mongodb-driver-sync</artifactId>
+      <version>${mongo-driver.version}</version>
+    </dependency>
+
+    <!-- SLF4J provided at runtime by zipkin-server -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${slf4j.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+</project>
