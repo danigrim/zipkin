@@ -8,12 +8,14 @@ import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import org.bson.Document;
 import zipkin2.Call;
 import zipkin2.CheckResult;
 import zipkin2.internal.ClosedComponentException;
@@ -210,6 +212,29 @@ public final class MongoDBStorage extends StorageComponent {
 
   @Override public String toString() {
     return "MongoDBStorage{connectionString=" + connectionString + ", database=" + database + "}";
+  }
+
+  MongoCollection<Document> spans() {
+    return db().getCollection(MongoDBIndexCreator.SPANS_COLLECTION);
+  }
+
+  MongoCollection<Document> dependencies() {
+    return db().getCollection(MongoDBIndexCreator.DEPENDENCIES_COLLECTION);
+  }
+
+  MongoCollection<Document> autocompleteTagsCollection() {
+    return db().getCollection(MongoDBIndexCreator.AUTOCOMPLETE_COLLECTION);
+  }
+
+  void clear() {
+    try {
+      spans().drop();
+      dependencies().drop();
+      autocompleteTagsCollection().drop();
+      if (ensureSchema) MongoDBIndexCreator.ensureIndexes(db());
+    } catch (RuntimeException e) {
+      // ignored, may not be connected
+    }
   }
 
   @Override public void close() {
