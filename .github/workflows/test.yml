@@ -72,6 +72,7 @@ jobs:
           - name: zipkin-collector-pulsar
           - name: zipkin-storage-cassandra
           - name: zipkin-storage-elasticsearch
+          - name: zipkin-storage-mongodb
           - name: zipkin-storage-mysql-v1
           - name: zipkin-server
     steps:
