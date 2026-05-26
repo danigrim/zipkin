@@ -29,6 +29,7 @@ import zipkin2.storage.SpanStore;
 import zipkin2.storage.Traces;
 
 import static com.mongodb.client.model.Filters.and;
+import static com.mongodb.client.model.Filters.elemMatch;
 import static com.mongodb.client.model.Filters.eq;
 import static com.mongodb.client.model.Filters.gte;
 import static com.mongodb.client.model.Filters.in;
@@ -98,6 +99,36 @@ class MongoDBSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
       eq("localEndpoint.serviceName", serviceName.toLowerCase(Locale.ROOT)));
   }
 
+  // --- Trace ID filter helpers ------------------------------------------------
+
+  static Bson traceIdFilter(String traceId, boolean strictTraceId) {
+    if (!strictTraceId) {
+      String suffix = traceId.length() == 32 ? traceId.substring(16) : traceId;
+      return regex("traceId", suffix + "$");
+    }
+    return eq("traceId", traceId);
+  }
+
+  static Bson traceIdsFilter(Set<String> traceIds, boolean strictTraceId) {
+    if (!strictTraceId) {
+      Set<String> suffixes = new LinkedHashSet<>();
+      for (String id : traceIds) {
+        suffixes.add(id.length() == 32 ? id.substring(16) : id);
+      }
+      List<Bson> regexFilters = new ArrayList<>();
+      for (String suffix : suffixes) {
+        regexFilters.add(regex("traceId", suffix + "$"));
+      }
+      return regexFilters.size() == 1 ? regexFilters.get(0) : or(regexFilters);
+    }
+    return in("traceId", traceIds);
+  }
+
+  static String traceGroupKey(String traceId, boolean strictTraceId) {
+    if (!strictTraceId && traceId.length() == 32) return traceId.substring(16);
+    return traceId;
+  }
+
   // --- Document to Span conversion ---
 
   static Span documentToSpan(Document doc) {
@@ -134,9 +165,9 @@ class MongoDBSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
       }
     }
     if (doc.containsKey("tags")) {
-      Document tags = doc.get("tags", Document.class);
-      for (Map.Entry<String, Object> entry : tags.entrySet()) {
-        builder.putTag(entry.getKey(), String.valueOf(entry.getValue()));
+      List<Document> tagDocs = doc.getList("tags", Document.class);
+      for (Document tagDoc : tagDocs) {
+        builder.putTag(tagDoc.getString("key"), tagDoc.getString("value"));
       }
     }
     if (doc.containsKey("debug") && Boolean.TRUE.equals(doc.getBoolean("debug"))) {
@@ -170,12 +201,7 @@ class MongoDBSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
 
     @Override protected List<Span> doExecute() throws IOException {
       try {
-        Bson filter;
-        if (!store.storage.strictTraceId && traceId.length() == 32) {
-          filter = regex("traceId", traceId.substring(16) + "$");
-        } else {
-          filter = eq("traceId", traceId);
-        }
+        Bson filter = traceIdFilter(traceId, store.storage.strictTraceId);
         List<Span> result = new ArrayList<>();
         try (MongoCursor<Document> cursor = store.spans().find(filter).iterator()) {
           while (cursor.hasNext()) {
@@ -212,37 +238,19 @@ class MongoDBSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
 
     @Override protected List<List<Span>> doExecute() throws IOException {
       try {
+        boolean strict = store.storage.strictTraceId;
+        Bson filter = traceIdsFilter(traceIds, strict);
         Map<String, List<Span>> grouped = new LinkedHashMap<>();
-        Bson filter;
-        if (!store.storage.strictTraceId) {
-          Set<String> suffixes = new LinkedHashSet<>();
-          for (String id : traceIds) {
-            suffixes.add(id.length() == 32 ? id.substring(16) : id);
-          }
-          List<Bson> regexFilters = new ArrayList<>();
-          for (String suffix : suffixes) {
-            regexFilters.add(regex("traceId", suffix + "$"));
-          }
-          filter = or(regexFilters);
-        } else {
-          filter = in("traceId", traceIds);
-        }
         try (MongoCursor<Document> cursor = store.spans().find(filter).iterator()) {
           while (cursor.hasNext()) {
             Span span = documentToSpan(cursor.next());
-            String key = span.traceId();
-            if (!store.storage.strictTraceId && key.length() == 32) {
-              key = key.substring(16);
-            }
+            String key = traceGroupKey(span.traceId(), strict);
             grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(span);
           }
         }
         List<List<Span>> result = new ArrayList<>();
         for (String id : traceIds) {
-          String key = id;
-          if (!store.storage.strictTraceId && key.length() == 32) {
-            key = key.substring(16);
-          }
+          String key = traceGroupKey(id, strict);
           List<Span> trace = grouped.get(key);
           if (trace != null) result.add(trace);
         }
@@ -276,6 +284,7 @@ class MongoDBSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
 
     @Override protected List<List<Span>> doExecute() throws IOException {
       try {
+        boolean strict = store.storage.strictTraceId;
         List<Bson> filters = new ArrayList<>();
 
         if (request.serviceName() != null) {
@@ -302,38 +311,34 @@ class MongoDBSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
           filters.add(lte("duration", request.maxDuration()));
         }
 
-        // Annotation query
+        // Annotation query (tags stored as array of {key, value})
         Map<String, String> annotationQuery = request.annotationQuery();
         if (annotationQuery != null && !annotationQuery.isEmpty()) {
           for (Map.Entry<String, String> entry : annotationQuery.entrySet()) {
             String key = entry.getKey();
             String value = entry.getValue();
             if (value.isEmpty()) {
-              filters.add(new Document("$or", List.of(
-                new Document("annotations.value", key),
-                new Document("tags." + key, new Document("$exists", true))
-              )));
+              filters.add(or(
+                eq("annotations.value", key),
+                eq("tags.key", key)
+              ));
             } else {
-              filters.add(eq("tags." + key, value));
+              filters.add(elemMatch("tags", and(eq("key", key), eq("value", value))));
             }
           }
         }
 
         Bson filter = filters.isEmpty() ? new Document() : and(filters);
 
-        // First find matching traceIds from root spans matching the filter
+        // Find matching traceIds
         Set<String> matchingTraceIds = new LinkedHashSet<>();
         try (MongoCursor<Document> cursor = store.spans()
           .find(filter)
           .sort(descending("timestamp"))
           .iterator()) {
           while (cursor.hasNext()) {
-            Document doc = cursor.next();
-            String traceId = doc.getString("traceId");
-            if (!store.storage.strictTraceId && traceId.length() == 32) {
-              traceId = traceId.substring(16);
-            }
-            matchingTraceIds.add(traceId);
+            String traceId = cursor.next().getString("traceId");
+            matchingTraceIds.add(traceGroupKey(traceId, strict));
           }
         }
 
@@ -346,26 +351,14 @@ class MongoDBSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
           limitedTraceIds.add(id);
         }
 
-        // Now fetch all spans for each matched trace
+        // Fetch all spans for each matched trace
+        Set<String> limitedSet = new LinkedHashSet<>(limitedTraceIds);
+        Bson traceFilter = traceIdsFilter(limitedSet, strict);
         Map<String, List<Span>> grouped = new LinkedHashMap<>();
-        Bson traceFilter;
-        if (!store.storage.strictTraceId) {
-          List<Bson> regexFilters = new ArrayList<>();
-          for (String suffix : limitedTraceIds) {
-            regexFilters.add(regex("traceId", suffix + "$"));
-          }
-          traceFilter = or(regexFilters);
-        } else {
-          traceFilter = in("traceId", limitedTraceIds);
-        }
-
         try (MongoCursor<Document> cursor = store.spans().find(traceFilter).iterator()) {
           while (cursor.hasNext()) {
             Span span = documentToSpan(cursor.next());
-            String key = span.traceId();
-            if (!store.storage.strictTraceId && key.length() == 32) {
-              key = key.substring(16);
-            }
+            String key = traceGroupKey(span.traceId(), strict);
             grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(span);
           }
         }
@@ -422,13 +415,15 @@ class MongoDBSpanStore implements SpanStore, Traces, ServiceAndSpanNames {
 
         if (traceIds.isEmpty()) return List.of();
 
-        // Fetch ALL spans for those traces (including ones without timestamps)
+        // Fetch ALL spans for those traces using suffix matching
+        Bson traceFilter = traceIdsFilter(traceIds, false);
         Map<String, List<Span>> traces = new LinkedHashMap<>();
         try (MongoCursor<Document> cursor =
-               store.spans().find(in("traceId", traceIds)).iterator()) {
+               store.spans().find(traceFilter).iterator()) {
           while (cursor.hasNext()) {
             Span span = documentToSpan(cursor.next());
-            traces.computeIfAbsent(span.traceId(), k -> new ArrayList<>()).add(span);
+            String key = traceGroupKey(span.traceId(), false);
+            traces.computeIfAbsent(key, k -> new ArrayList<>()).add(span);
           }
         }
         DependencyLinker linker = new DependencyLinker();

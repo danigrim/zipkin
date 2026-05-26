@@ -5,11 +5,11 @@
 package zipkin2.storage.mongodb;
 
 import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.ReplaceOptions;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.bson.Document;
 import zipkin2.Annotation;
 import zipkin2.Call;
@@ -17,9 +17,6 @@ import zipkin2.Callback;
 import zipkin2.Endpoint;
 import zipkin2.Span;
 import zipkin2.storage.SpanConsumer;
-
-import static com.mongodb.client.model.Filters.and;
-import static com.mongodb.client.model.Filters.eq;
 
 class MongoDBSpanConsumer implements SpanConsumer {
 
@@ -63,10 +60,14 @@ class MongoDBSpanConsumer implements SpanConsumer {
       doc.put("annotations", annotations);
     }
     if (!span.tags().isEmpty()) {
-      doc.put("tags", new Document(span.tags()));
+      List<Document> tagDocs = new ArrayList<>(span.tags().size());
+      for (Map.Entry<String, String> entry : span.tags().entrySet()) {
+        tagDocs.add(new Document("key", entry.getKey()).append("value", entry.getValue()));
+      }
+      doc.put("tags", tagDocs);
     }
     if (Boolean.TRUE.equals(span.debug())) doc.put("debug", true);
-    doc.put("shared", Boolean.TRUE.equals(span.shared()));
+    if (Boolean.TRUE.equals(span.shared())) doc.put("shared", true);
     return doc;
   }
 
@@ -92,14 +93,8 @@ class MongoDBSpanConsumer implements SpanConsumer {
       try {
         MongoCollection<Document> collection =
           storage.database().getCollection(storage.spanCollection);
-        ReplaceOptions upsert = new ReplaceOptions().upsert(true);
         for (Span span : spans) {
-          Document doc = toDocument(span);
-          boolean shared = Boolean.TRUE.equals(span.shared());
-          collection.replaceOne(
-            and(eq("traceId", span.traceId()), eq("id", span.id()),
-              eq("shared", shared)),
-            doc, upsert);
+          collection.insertOne(toDocument(span));
         }
       } catch (RuntimeException e) {
         throw new IOException(e);

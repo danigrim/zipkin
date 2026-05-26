@@ -4,13 +4,11 @@
  */
 package zipkin2.storage.mongodb;
 
-import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import zipkin2.Span;
 import zipkin2.storage.StorageComponent.Builder;
 
 @Testcontainers
@@ -25,6 +23,10 @@ class ITMongoDBStorage {
       return mongo.newStorageBuilder();
     }
 
+    @Override protected boolean returnsRawSpans() {
+      return false;
+    }
+
     @Override public void clear() {
       mongo.clear(storage);
     }
@@ -34,6 +36,10 @@ class ITMongoDBStorage {
   class ITSpanStore extends zipkin2.storage.ITSpanStore<MongoDBStorage> {
     @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return mongo.newStorageBuilder();
+    }
+
+    @Override protected boolean returnsRawSpans() {
+      return false;
     }
 
     @Override public void clear() {
@@ -47,6 +53,10 @@ class ITMongoDBStorage {
       return mongo.newStorageBuilder();
     }
 
+    @Override protected boolean returnsRawSpans() {
+      return false;
+    }
+
     @Override public void clear() {
       mongo.clear(storage);
     }
@@ -56,6 +66,10 @@ class ITMongoDBStorage {
   class ITStrictTraceIdFalse extends zipkin2.storage.ITStrictTraceIdFalse<MongoDBStorage> {
     @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return mongo.newStorageBuilder();
+    }
+
+    @Override protected boolean returnsRawSpans() {
+      return false;
     }
 
     @Override public void clear() {
@@ -69,6 +83,10 @@ class ITMongoDBStorage {
       return mongo.newStorageBuilder();
     }
 
+    @Override protected boolean returnsRawSpans() {
+      return false;
+    }
+
     @Override public void clear() {
       mongo.clear(storage);
     }
@@ -80,6 +98,10 @@ class ITMongoDBStorage {
       return mongo.newStorageBuilder();
     }
 
+    @Override protected boolean returnsRawSpans() {
+      return false;
+    }
+
     @Override public void clear() {
       mongo.clear(storage);
     }
@@ -89,6 +111,10 @@ class ITMongoDBStorage {
   class ITDependencies extends zipkin2.storage.ITDependencies<MongoDBStorage> {
     @Override protected Builder newStorageBuilder(TestInfo testInfo) {
       return mongo.newStorageBuilder();
+    }
+
+    @Override protected boolean returnsRawSpans() {
+      return false;
     }
 
     @Override public void clear() {

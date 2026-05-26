@@ -5,9 +5,12 @@
 package zipkin2.storage.mongodb;
 
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.bson.Document;
@@ -15,7 +18,7 @@ import zipkin2.Call;
 import zipkin2.Callback;
 import zipkin2.storage.AutocompleteTags;
 
-import static com.mongodb.client.model.Filters.exists;
+import static com.mongodb.client.model.Filters.eq;
 
 class MongoDBAutocompleteTags implements AutocompleteTags {
 
@@ -52,8 +55,7 @@ class MongoDBAutocompleteTags implements AutocompleteTags {
 
         List<String> result = new ArrayList<>();
         for (String key : autocompleteKeys) {
-          // Check if any span document has this tag key
-          Document found = tags.spans().find(exists("tags." + key)).first();
+          Document found = tags.spans().find(eq("tags.key", key)).first();
           if (found != null) result.add(key);
         }
         Collections.sort(result);
@@ -87,8 +89,19 @@ class MongoDBAutocompleteTags implements AutocompleteTags {
 
     @Override protected List<String> doExecute() throws IOException {
       try {
-        List<String> result = new ArrayList<>();
-        tags.spans().distinct("tags." + key, String.class).into(result);
+        Set<String> values = new LinkedHashSet<>();
+        List<Document> pipeline = Arrays.asList(
+          new Document("$unwind", "$tags"),
+          new Document("$match", new Document("tags.key", key)),
+          new Document("$group", new Document("_id", "$tags.value"))
+        );
+        try (MongoCursor<Document> cursor = tags.spans().aggregate(pipeline).iterator()) {
+          while (cursor.hasNext()) {
+            String val = cursor.next().getString("_id");
+            if (val != null) values.add(val);
+          }
+        }
+        List<String> result = new ArrayList<>(values);
         Collections.sort(result);
         return result;
       } catch (RuntimeException e) {
