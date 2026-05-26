@@ -39,7 +39,7 @@ class ITMongoDBStorage {
     }
 
     @Override protected boolean returnsRawSpans() {
-      return false;
+      return true;
     }
 
     @Override public void clear() {
