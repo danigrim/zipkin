@@ -66,7 +66,7 @@ class MongoDBSpanConsumer implements SpanConsumer {
       doc.put("tags", new Document(span.tags()));
     }
     if (Boolean.TRUE.equals(span.debug())) doc.put("debug", true);
-    if (Boolean.TRUE.equals(span.shared())) doc.put("shared", true);
+    doc.put("shared", Boolean.TRUE.equals(span.shared()));
     return doc;
   }
 
@@ -95,9 +95,10 @@ class MongoDBSpanConsumer implements SpanConsumer {
         ReplaceOptions upsert = new ReplaceOptions().upsert(true);
         for (Span span : spans) {
           Document doc = toDocument(span);
+          boolean shared = Boolean.TRUE.equals(span.shared());
           collection.replaceOne(
             and(eq("traceId", span.traceId()), eq("id", span.id()),
-              eq("shared", Boolean.TRUE.equals(span.shared()))),
+              eq("shared", shared)),
             doc, upsert);
         }
       } catch (RuntimeException e) {
